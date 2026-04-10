@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Google Drive</title>
+<link rel="icon" id="icon" href="https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png">
+
+<style>
+body { margin:0; font-family:sans-serif; background:#0b0b0b; color:#fff; overflow:hidden; }
+
+/* Top UI */
+#tabs { display:flex; background:#111; padding:5px; }
+.tab { padding:5px 10px; background:#222; margin-right:5px; cursor:pointer; border-radius:6px; }
+.active { background:#3d5afe; }
+
+#bar { display:flex; padding:10px; background:#111; }
+input { flex:1; padding:8px; border-radius:6px; border:none; }
+button { margin-left:5px; padding:8px; border:none; border-radius:6px; background:#3d5afe; color:#fff; cursor:pointer; }
+
+iframe { width:100%; height:calc(100vh - 140px); border:none; }
+
+/* Panels */
+#ai, #settings, #historyPanel {
+  position:fixed;
+  bottom:90px;
+  left:50%;
+  transform:translateX(-50%);
+  width:300px;
+  background:#111;
+  padding:10px;
+  border-radius:12px;
+  display:none;
+  max-height:300px;
+  overflow:auto;
+}
+
+/* 🍎 iPhone Dock */
+#dock {
+  position:fixed;
+  bottom:15px;
+  left:50%;
+  transform:translateX(-50%);
+  backdrop-filter: blur(20px);
+  background:rgba(255,255,255,0.08);
+  padding:10px 20px;
+  border-radius:40px;
+  display:flex;
+  gap:20px;
+  box-shadow:0 0 20px rgba(0,0,0,0.5);
+}
+
+.dock-btn {
+  font-size:22px;
+  cursor:pointer;
+  transition:0.2s;
+}
+
+.dock-btn:hover {
+  transform:scale(1.2);
+}
+</style>
+</head>
+
+<body>
+
+<div id="tabs"></div>
+
+<div id="bar">
+<button onclick="back()">⬅️</button>
+<button onclick="forward()">➡️</button>
+<button onclick="reload()">🔄</button>
+<input id="url" placeholder="Search or enter URL">
+<button onclick="go()">Go</button>
+<button onclick="newTab()">+</button>
+</div>
+
+<iframe id="frame"></iframe>
+
+<!-- Panels -->
+<div id="ai">
+<div id="chat"></div>
+<input id="aiInput" placeholder="Ask AI">
+<button onclick="ai()">Send</button>
+</div>
+
+<div id="settings">
+<h3>Settings</h3>
+<button onclick="cloak('drive')">Drive Cloak</button>
+<button onclick="cloak('classroom')">Classroom Cloak</button>
+<button onclick="openBlank()">About:Blank</button>
+<label><input type="checkbox" id="blobToggle"> Blob Mode</label>
+</div>
+
+<div id="historyPanel"></div>
+
+<!-- 🍎 Dock -->
+<div id="dock">
+<div class="dock-btn" onclick="showView('browser')">🌐</div>
+<div class="dock-btn" onclick="showView('ai')">🤖</div>
+<div class="dock-btn" onclick="showView('history')">📜</div>
+<div class="dock-btn" onclick="showView('settings')">⚙️</div>
+</div>
+
+<script src="/uv/uv.bundle.js"></script>
+<script src="/uv/uv.config.js"></script>
+
+<script>
+let tabs=[];
+let current=0;
+let history=JSON.parse(localStorage.getItem("history")||"[]");
+
+function newTab(url="https://google.com"){
+  tabs.push({url});
+  current=tabs.length-1;
+  renderTabs();
+  load(url);
+}
+
+function renderTabs(){
+  const t=document.getElementById("tabs");
+  t.innerHTML="";
+  tabs.forEach((tab,i)=>{
+    const d=document.createElement("div");
+    d.className="tab"+(i===current?" active":"");
+    d.innerText="Tab "+(i+1);
+    d.onclick=()=>{current=i; load(tab.url)};
+    t.appendChild(d);
+  });
+}
+
+function format(input){
+  try{return new URL(input).toString();}
+  catch{return "https://www.google.com/search?q="+encodeURIComponent(input);}
+}
+
+async function go(){
+  const input=document.getElementById("url").value;
+  load(input);
+}
+
+async function load(input){
+  if("serviceWorker" in navigator){
+    await navigator.serviceWorker.register("/uv/uv.sw.js",{scope:"/uv/service/"});
+  }
+
+  const url=format(input);
+  tabs[current].url=url;
+
+  history.push(url);
+  localStorage.setItem("history",JSON.stringify(history));
+
+  const encoded=__uv$config.encodeUrl(url);
+  const final=__uv$config.prefix+encoded;
+
+  if(document.getElementById("blobToggle").checked){
+    const html=`<iframe src="${final}" style="width:100%;height:100%;border:none;"></iframe>`;
+    const blob=new Blob([html],{type:"text/html"});
+    document.getElementById("frame").src=URL.createObjectURL(blob);
+  } else {
+    document.getElementById("frame").src=final;
+  }
+}
+
+function back(){frame.contentWindow.history.back();}
+function forward(){frame.contentWindow.history.forward();}
+function reload(){frame.contentWindow.location.reload();}
+
+function cloak(type){
+  if(type==="drive"){
+    document.title="Google Drive";
+    icon.href="https://ssl.gstatic.com/docs/doclist/images/drive_2022q3_32dp.png";
+  }
+  if(type==="classroom"){
+    document.title="Classes";
+    icon.href="https://ssl.gstatic.com/classroom/favicon.png";
+  }
+}
+
+function openBlank(){
+  const win=window.open("about:blank");
+  win.document.write(`<iframe src="${location.href}" style="width:100%;height:100%;border:none;"></iframe>`);
+}
+
+function showView(view){
+  frame.style.display="none";
+  ai.style.display="none";
+  settings.style.display="none";
+  historyPanel.style.display="none";
+
+  if(view==="browser") frame.style.display="block";
+  if(view==="ai") ai.style.display="block";
+  if(view==="settings") settings.style.display="block";
+
+  if(view==="history"){
+    historyPanel.style.display="block";
+    historyPanel.innerHTML=history.slice(-20).map(h=>`<div onclick="load('${h}')">${h}</div>`).join("");
+  }
+}
+
+/* 🤖 AI */
+function ai(){
+  const input=document.getElementById("aiInput").value.toLowerCase();
+  const chat=document.getElementById("chat");
+
+  chat.innerHTML+="<div>🧑 "+input+"</div>";
+
+  let res="I don't understand";
+
+  if(input.includes("open")){
+    const site=input.replace("open ","");
+    newTab("https://"+site+".com");
+    res="Opening "+site;
+  }
+  else if(input.includes("search")){
+    const q=input.replace("search ","");
+    newTab("https://google.com/search?q="+q);
+    res="Searching "+q;
+  }
+  else if(input==="new tab"){ newTab(); res="New tab"; }
+  else if(input==="reload"){ reload(); res="Reloading"; }
+  else if(input==="hello"){ res="Hey 👋"; }
+
+  chat.innerHTML+="<div>🤖 "+res+"</div>";
+}
+
+newTab();
+</script>
+
+</body>
+</html>
